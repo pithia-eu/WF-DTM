@@ -1,3 +1,4 @@
+import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,6 +6,7 @@ from pydantic import BaseModel
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+import shutil
 
 AP_TO_KP = {
     0:0,
@@ -76,6 +78,21 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
     if datetime.strptime(date, '%Y-%m-%d') > yesterday or datetime.strptime(date, '%Y-%m-%d') < datetime(1970, 1, 1):
         raise HTTPException(status_code=400, detail="The date should be from 1970-01-01 to yesterday.")
 
+    final_zip_file = f"{script_dir}/output/{date}/{altitude}/final_output.zip"
+    # Check whether the final zip file is already created
+    if os.path.exists(final_zip_file):
+        return FileResponse(final_zip_file, media_type='application/octet-stream', filename='final_output.zip')
+    
+    # Create the final output folder
+    final_output_folder = f"{script_dir}/output/{date}/{altitude}/final"
+    # If the final output folder exists, remove it
+    if os.path.exists(final_output_folder):
+        os.system(f"rm -rf {final_output_folder}")
+    else:
+        # Create the final output folder if it does not exist
+        os.makedirs(final_output_folder, exist_ok=True)
+        
+    
     # Construct the start date and end date for the KP data, start date is previous 81 days from the date, end date is the day after the date
     start_date = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=80)).strftime('%Y-%m-%d')
     end_date = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
@@ -149,4 +166,81 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
             }
         ]
     }
-    return JSONResponse(status_code=200, content=output_json)
+    # For each runs, print the parameters
+    run_responses = []
+    try:
+        for run in output_json['runs']:
+            hour = 0 # Hour, every 3 hours
+            # For each akp1 value, print the akp1 value
+            for akp1 in run['akp1']:
+                # the input parameter for the DTM2020 model is (fm, fl, alt, day, akp1, akp3)
+                run_params = (run['fm'], run['fl'], run['alt'], run['day'], akp1, run['akp3'])
+                # Construct the request URL for the DTM2020 model: https://dtm.pithia.eu/execute?fm=180&fl=100&alt=300&day=180&akp1=0&akp3=0
+                run_request = f"https://dtm.pithia.eu/execute?fm={run_params[0]}&fl={run_params[1]}&alt={run_params[2]}&day={run_params[3]}&akp1={akp1}&akp3={run_params[5]}"
+                # Run the request URL
+                run_response = requests.get(run_request)
+                # Response: [{"execution_id": xxx}], change the execution id to day_hour
+                run_response_json = run_response.json()
+                new_execution_id = f"{run_params[3]}_{hour}"
+                # append the run response to the run_responses array
+                run_responses.append({new_execution_id: run_response_json[0]["execution_id"]})
+                hour += 3
+        for execution in run_responses:
+            for key, value in execution.items():
+                # Construct the request URL to download the results: https://dtm.pithia.eu/results?execution_id=xxx
+                results_request = f"https://dtm.pithia.eu/results?execution_id={value}"
+                # print the response content file name and size
+                # print(f"File name: {results_response.headers['Content-Disposition']}, File size: {results_response.headers['Content-Length']}, Request Execution: {key} {value}")
+                # The response content is a zip file, it contains the following files: 'DTM20F107Kp_N2.datx', 'DTM20F107Kp_N2.png', 'DTM20F107Kp_ro.datx', 'DTM20F107Kp_ro.png' ...
+                # Need to extract and rename all the .datx and .png files by replacing the 'DTM20F107Kp' with the key
+                # Step 1: Save the zip file, to /output/date/altitude/ folder, create the folder if not exist
+                output_folder = f"{script_dir}/output/{date}/{altitude}"
+                # Create the output folder if not exist
+                os.makedirs(output_folder, exist_ok=True)
+                # Check whether the file is already downloaded
+                if os.path.exists(f"{output_folder}/{key}.zip"):
+                    print(f"The file {key}.zip is already downloaded.")
+                else:
+                    # Run the request URL
+                    results_response = requests.get(results_request)
+                    # Save the zip file to the output folder
+                    with open(f"{output_folder}/{key}.zip", 'wb') as f:
+                        f.write(results_response.content)
+                        # Unzip the file
+                # Check whether the file is already unzipped
+                if os.path.exists(f"{output_folder}/{key}"):
+                    print(f"The file {key} is already unzipped.")
+                else:
+                    os.system(f"unzip {output_folder}/{key}.zip -d {output_folder}/{key}")
+    
+        folder_metrics = ['He','N2','O','ro','Tinf','Tz']
+        # For each folder metric, create the folder, plots_metric and datas_metric
+        for folder_metric in folder_metrics:
+            os.makedirs(f"{final_output_folder}/plots_{folder_metric}/", exist_ok=True)
+            os.makedirs(f"{final_output_folder}/datas_{folder_metric}/", exist_ok=True)
+            
+        for execution in run_responses:
+            for key, value in execution.items():
+                # Locate the unzipped folder
+                unzipped_folder = f"{output_folder}/{key}"
+                # For each folder metric, copy the .datx and .png files to the final output folder, in the corresponding datas_metric and plots_metric folder, depending on the file name contains the metric, e.g. 'He', 'N2', 'O', 'ro', 'Tinf', 'Tz', and also rename the file by replacing the 'DTM20F107Kp' with the key
+                for folder_metric in folder_metrics:
+                    for filename in os.listdir(unzipped_folder):
+                        if folder_metric in filename:
+                            if filename.endswith('.datx'):
+                                os.system(f"cp {unzipped_folder}/{filename} {final_output_folder}/datas_{folder_metric}/{filename.replace('DTM20F107Kp', key)}")
+                            elif filename.endswith('.png'):
+                                os.system(f"cp {unzipped_folder}/{filename} {final_output_folder}/plots_{folder_metric}/{filename.replace('DTM20F107Kp', key)}")
+        # Save the output_json to the final_output_folder
+        with open(f"{final_output_folder}/inputs_runs.json", 'w') as f:
+            f.write(str(output_json))
+        # Zip the final_output_folder, don't include the parent folder, use the os.system command
+        os.system(f"cd {script_dir}/output/{date}/{altitude} && zip -r {final_zip_file} final")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred while running the DTM2020 model: {str(e)}")
+    
+    #check the final zip file
+    if os.path.exists(final_zip_file):
+        return FileResponse(final_zip_file, media_type='application/octet-stream', filename='final_output.zip')
+    else:
+        raise HTTPException(status_code=500, detail="An error occurred while creating the final zip file.")
