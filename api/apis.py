@@ -1,3 +1,4 @@
+import json
 import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
@@ -51,7 +52,7 @@ app = FastAPI(
         },
     ],
     title="DTM2020 Workflow API",
-    description="The DTM2020 workflow includes a total of 16 runs on the DTM2020-operational: semi-empirical thermosphere model.",
+    description="<p>The DTM2020 model predictions are calculated at a specified altitude (latitude - local time grids) from the specified start date every 3 hours for 3 days (i.e. 24 epochs, 0h, +3h, +6h, etc) using the observed F10.7 and geomagnetic activity indices Kp.</p><br/><p>The effect of a geomagnetic storm can be visualized effectively with this workflow.</p><br/><p>The partial density and temperature grids and plots, and the observed F10.7 flux and Kp, can be downloaded by clicking on 'Download file' (rename the file and add .zip as an extension).</p>",
     version="1.0.0",
 )
 
@@ -73,10 +74,10 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
         datetime.strptime(date, '%Y-%m-%d')
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Ensure the format is YYYY-MM-DD.")
-    # Validate the date range from 1970-01-01 to yesterday
-    yesterday = datetime.now() - timedelta(days=1)
-    if datetime.strptime(date, '%Y-%m-%d') > yesterday or datetime.strptime(date, '%Y-%m-%d') < datetime(1970, 1, 1):
-        raise HTTPException(status_code=400, detail="The date should be from 1970-01-01 to yesterday.")
+    # Validate the date range from 1970-01-01 to 3 days ago
+    days_3_ago = datetime.now() - timedelta(days=3)
+    if datetime.strptime(date, '%Y-%m-%d') > days_3_ago or datetime.strptime(date, '%Y-%m-%d') < datetime(1970, 1, 1):
+        raise HTTPException(status_code=400, detail="The date should be from 1970-01-01 to 3 days ago.")
 
     final_zip_file = f"{script_dir}/output/{date}/{altitude}/final_output.zip"
     # Check whether the final zip file is already created
@@ -93,12 +94,14 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
         os.makedirs(final_output_folder, exist_ok=True)
         
     
-    # Construct the start date and end date for the KP data, start date is previous 81 days from the date, end date is the day after the date
+    # Construct the start date and end date for the KP data, start date is previous 81 days from the date, end date is 2 days after the date
     start_date = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=80)).strftime('%Y-%m-%d')
+    start_1_date = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=79)).strftime('%Y-%m-%d')
     end_date = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+    end_2_date = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=2)).strftime('%Y-%m-%d')
     select_date = datetime.strptime(date, '%Y-%m-%d')
     previous_date = select_date - timedelta(days=1)
-    print(f"Start date: {start_date}, End date: {end_date}")
+    print(f"Start date: {start_date}, End date: {end_2_date}")
     
     # The URL of the dataset
     DATA_URL="https://kp.gfz-potsdam.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
@@ -110,30 +113,54 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
     # Add the date index to the dataframe
     df['Date'] = pd.to_datetime(df[['Year', 'Month', 'Day']])
     # Filter the dataset from the start_date to end_date, include end_date, by comparing Date index
-    df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
-    # Get the mean value of F10.7obs for two date range, 1. from start_date to (end_date - 1), 2. from (start_date + 1) to end_date
-    mean_f107_1 = df[(df['Date'] >= start_date) & (df['Date'] < end_date)]['F10.7obs'].mean()
+    df = df[(df['Date'] >= start_date) & (df['Date'] <= end_2_date)]
+    # Get the mean value of F10.7obs for two date range, 1. from start_date to (end_date - 1), 2. from (start_date + 1) to end_date, 3. from start_1_date to (end_2_date - 1)
+    mean_f107_1 = df[(df['Date'] >= start_date) & (df['Date'] <= select_date)]['F10.7obs'].mean()
     mean_f107_2 = df[(df['Date'] > start_date) & (df['Date'] <= end_date)]['F10.7obs'].mean()
+    mean_f107_3 = df[(df['Date'] > start_1_date) & (df['Date'] <= end_2_date)]['F10.7obs'].mean()
+    # convert df[(df['Date'] >= start_date) & (df['Date'] <= select_date)]['F10.7obs'] to JSON, with ["Date" format as "YYYY-MM-DD", "F10.7obs"]
+    f107_1_json = df[(df['Date'] >= start_date) & (df['Date'] <= select_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    f107_2_json = df[(df['Date'] > start_date) & (df['Date'] <= end_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    f107_3_json = df[(df['Date'] > start_1_date) & (df['Date'] <= end_2_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    # Load the JSON string to JSON object, and convert the date (epoch time) to date string format
+    f107_1_json = json.loads(f107_1_json)
+    for item in f107_1_json:
+        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+    f107_2_json = json.loads(f107_2_json)
+    for item in f107_2_json:
+        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+    f107_3_json = json.loads(f107_3_json)
+    for item in f107_3_json:
+        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+        
     print(f"81-day Mean F10.7obs for {select_date}: {mean_f107_1}")
     print(f"81-day Mean F10.7obs for {end_date}: {mean_f107_2}")
+    print(f"81-day Mean F10.7obs for {end_2_date}: {mean_f107_3}")
     # Get the previous day and current day 'Ap' value
     ap_1 = df[df['Date'] == previous_date]['Ap'].values[0]
     ap_2 = df[df['Date'] == select_date]['Ap'].values[0]
+    ap_3 = df[df['Date'] == end_date]['Ap'].values[0]
     # Find the closest of AP_TO_KP dictionary key to the 'Ap' value, and get the corresponding Kp value
     kp_1 = AP_TO_KP[min(AP_TO_KP.keys(), key=lambda x:abs(x-ap_1))]
     kp_2 = AP_TO_KP[min(AP_TO_KP.keys(), key=lambda x:abs(x-ap_2))]
+    kp_3 = AP_TO_KP[min(AP_TO_KP.keys(), key=lambda x:abs(x-ap_3))]
     print(f"Kp value for {previous_date}: {ap_1} -> {kp_1}")
     print(f"Kp value for {select_date}: {ap_2} -> {kp_2}")
+    print(f"Kp value for {end_date}: {ap_3} -> {kp_3}")
     # Get the F10.7obs value for the previous day and current day
     f107_1 = df[df['Date'] == previous_date]['F10.7obs'].values[0]
     f107_2 = df[df['Date'] == select_date]['F10.7obs'].values[0]
+    f107_3 = df[df['Date'] == end_date]['F10.7obs'].values[0]
     print(f"F10.7obs value for {previous_date}: {f107_1}")
     print(f"F10.7obs value for {select_date}: {f107_2}")
+    print(f"F10.7obs value for {end_date}: {f107_3}")
     # Get the number of days for current day and end_date from the start of year
     days_1 = (select_date - datetime(select_date.year, 1, 1)).days + 1
     days_2 = (datetime.strptime(end_date, '%Y-%m-%d') - datetime(datetime.strptime(end_date, '%Y-%m-%d').year, 1, 1)).days + 1
+    days_3 = (datetime.strptime(end_2_date, '%Y-%m-%d') - datetime(datetime.strptime(end_2_date, '%Y-%m-%d').year, 1, 1)).days + 1
     print(f"Number of days from the start of the year for {select_date}: {days_1}")
     print(f"Number of days from the start of the year for {end_date}: {days_2}")
+    print(f"Number of days from the start of the year for {end_2_date}: {days_3}")
     # For days_1, create an array to store the 'Kp8' value from the previou_day, and the 'Kp1' to 'Kp7' value from the current day
     Kp_pre_1 = df[df['Date'] == previous_date][['Kp8']].values[0]
     Kps_1 = df[df['Date'] == select_date][['Kp1', 'Kp2', 'Kp3', 'Kp4', 'Kp5', 'Kp6', 'Kp7']].values[0].tolist()
@@ -144,8 +171,13 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
     Kps_2 = df[df['Date'] == datetime.strptime(end_date, '%Y-%m-%d')][['Kp1', 'Kp2', 'Kp3', 'Kp4', 'Kp5', 'Kp6', 'Kp7']].values[0].tolist()
     # Add the Kp_pre_2 value to the Kps_2 array, at the beginning
     Kps_2.insert(0, Kp_pre_2[0])
+    Kp_pre_3 = df[df['Date'] == end_date][['Kp8']].values[0]
+    Kps_3 = df[df['Date'] == datetime.strptime(end_2_date, '%Y-%m-%d')][['Kp1', 'Kp2', 'Kp3', 'Kp4', 'Kp5', 'Kp6', 'Kp7']].values[0].tolist()
+    # Add the Kp_pre_3 value to the Kps_3 array, at the beginning
+    Kps_3.insert(0, Kp_pre_3[0])
     print(f"Kp values for {select_date}: {Kps_1}")
     print(f"Kp values for {end_date}: {Kps_2}")
+    print(f"Kp values for {end_2_date}: {Kps_3}")
     output_json = {
         "date": date,
         "altitude": altitude,
@@ -156,6 +188,8 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
              'alt':altitude,
              'akp1':Kps_1,
              'akp3':kp_1,
+             'f107':f107_1_json,
+             'ap':ap_1,
             },
             {'day':days_2,
              'fm':mean_f107_2,
@@ -163,7 +197,19 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
              'alt':altitude,
              'akp1':Kps_2,
              'akp3':kp_2,
-            }
+             'f107':f107_2_json,
+             'ap':ap_2,
+            },
+            {'day':days_3,
+             'fm':mean_f107_3,
+             'fl':f107_3,
+             'alt':altitude,
+             'akp1':Kps_3,
+             'akp3':kp_3,
+             'f107':f107_3_json,
+             'ap':ap_3,
+             }
+            
         ]
     }
     # For each runs, print the parameters
