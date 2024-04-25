@@ -67,7 +67,7 @@ app.add_middleware(
 
 
 # Define the new `run_workflow` API, accept two query parameters: `date` (from 1970-01-01 to yesterday) and `altitute` (from 120 to 1500 km)
-@app.get("/run_workflow/", response_class=StreamingResponse, responses={200: {"content": {"application/octet-stream": {}},"description": "**Important:** Please remember to rename the downloaded file to have the extension '*.zip' before opening it.\n\n",}},summary="Run the DTM2020 Workflow", description="Return the 16 runs parameters for the DTM2020 Model in JSON format.\n\n"+"**Important:** When selecting the 'zip' format, please remember to rename the downloaded file to have the extension '*.zip' before opening it.\n\n", tags=["Run Workflow"])
+@app.get("/run_workflow/", response_class=StreamingResponse, responses={200: {"content": {"application/octet-stream": {}},"description": "**Important:** Please remember to rename the downloaded file to have the extension '*.zip' before opening it.\n\n",}},summary="Run the DTM2020 Workflow", description="Return the 24 runs parameters for the DTM2020 Model in JSON format.\n\n"+"**Important:** When selecting the 'zip' format, please remember to rename the downloaded file to have the extension '*.zip' before opening it.\n\n", tags=["Run Workflow"])
 async def run_workflow(date: str = Query(..., description="Date in the format 'YYYY-MM-DD', e.g. 2024-01-01. The date should be from 1970-01-01"), altitude: int = Query(120, ge=120, le=1500, description="Altitude in km, from 120 to 1500 km.")):
     # Validate the date
     try:
