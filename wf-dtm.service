@@ -1,0 +1,18 @@
+[Unit]
+Description=Data Collection DTm Rest API
+Documentation=https://github.com/pithia-eu/WF-DTM/blob/main/README.md
+
+[Service]
+Type=simple
+User=root
+Group=root
+TimeoutStartSec=0
+Restart=on-failure
+RestartSec=30s
+#ExecStartPre=
+ExecStart=/home/ubuntu/WF-DTM/start_dtm.sh
+SyslogIdentifier=Diskutilization
+#ExecStop=
+
+[Install]
+WantedBy=multi-user.target
