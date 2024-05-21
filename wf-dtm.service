@@ -1,5 +1,5 @@
 [Unit]
-Description=Data Collection DTm Rest API
+Description=Workflow DTM Rest API
 Documentation=https://github.com/pithia-eu/WF-DTM/blob/main/README.md
 
 [Service]
