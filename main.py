@@ -119,23 +119,23 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
     mean_f107_2 = df[(df['Date'] > start_date) & (df['Date'] <= end_date)]['F10.7obs'].mean()
     mean_f107_3 = df[(df['Date'] > start_1_date) & (df['Date'] <= end_2_date)]['F10.7obs'].mean()
     # convert df[(df['Date'] >= start_date) & (df['Date'] <= select_date)]['F10.7obs'] to JSON, with ["Date" format as "YYYY-MM-DD", "F10.7obs"]
-    f107_1_json = df[(df['Date'] >= start_date) & (df['Date'] <= select_date)][['Date', 'F10.7obs']].to_json(orient='records')
-    f107_2_json = df[(df['Date'] > start_date) & (df['Date'] <= end_date)][['Date', 'F10.7obs']].to_json(orient='records')
-    f107_3_json = df[(df['Date'] > start_1_date) & (df['Date'] <= end_2_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    # f107_1_json = df[(df['Date'] >= start_date) & (df['Date'] <= select_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    # f107_2_json = df[(df['Date'] > start_date) & (df['Date'] <= end_date)][['Date', 'F10.7obs']].to_json(orient='records')
+    # f107_3_json = df[(df['Date'] > start_1_date) & (df['Date'] <= end_2_date)][['Date', 'F10.7obs']].to_json(orient='records')
     # Load the JSON string to JSON object, and convert the date (epoch time) to date string format
-    f107_1_json = json.loads(f107_1_json)
-    for item in f107_1_json:
-        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
-    f107_2_json = json.loads(f107_2_json)
-    for item in f107_2_json:
-        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
-    f107_3_json = json.loads(f107_3_json)
-    for item in f107_3_json:
-        item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+    # f107_1_json = json.loads(f107_1_json)
+    # for item in f107_1_json:
+    #     item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+    # f107_2_json = json.loads(f107_2_json)
+    # for item in f107_2_json:
+    #     item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
+    # f107_3_json = json.loads(f107_3_json)
+    # for item in f107_3_json:
+    #     item['Date'] = datetime.fromtimestamp(item['Date']/1000).strftime('%Y-%m-%d')
         
-    print(f"81-day Mean F10.7obs for {select_date}: {mean_f107_1}")
-    print(f"81-day Mean F10.7obs for {end_date}: {mean_f107_2}")
-    print(f"81-day Mean F10.7obs for {end_2_date}: {mean_f107_3}")
+    # print(f"81-day Mean F10.7obs for {select_date}: {mean_f107_1}")
+    # print(f"81-day Mean F10.7obs for {end_date}: {mean_f107_2}")
+    # print(f"81-day Mean F10.7obs for {end_2_date}: {mean_f107_3}")
     # Get the previous day and current day 'Ap' value
     ap_1 = df[df['Date'] == previous_date]['Ap'].values[0]
     ap_2 = df[df['Date'] == select_date]['Ap'].values[0]
@@ -188,7 +188,7 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
              'alt':altitude,
              'akp1':Kps_1,
              'akp3':kp_1,
-             'f107':f107_1_json,
+             #'f107':f107_1_json,
              'ap':ap_1,
             },
             {'day':days_2,
@@ -197,7 +197,7 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
              'alt':altitude,
              'akp1':Kps_2,
              'akp3':kp_2,
-             'f107':f107_2_json,
+             #'f107':f107_2_json,
              'ap':ap_2,
             },
             {'day':days_3,
@@ -206,7 +206,7 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
              'alt':altitude,
              'akp1':Kps_3,
              'akp3':kp_3,
-             'f107':f107_3_json,
+             #'f107':f107_3_json,
              'ap':ap_3,
              }
             
@@ -280,6 +280,34 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
         # Save the output_json to the final_output_folder
         with open(f"{final_output_folder}/inputs_runs.json", 'w') as f:
             f.write(str(output_json))
+        # Keep two decimal places for the mean_f107_1, mean_f107_2, mean_f107_3
+        mean_f107_1 = round(mean_f107_1, 2)
+        mean_f107_2 = round(mean_f107_2, 2)
+        mean_f107_3 = round(mean_f107_3, 2)
+        # Create the README.txt file
+        readme = f"Day 1 flux of previous day and mean flux: {f107_1} {mean_f107_1}\n"
+        # Get the kps values from Kps_1, separated by space, list to string
+        readme += f"Day 1 Akp(1): {' '.join(map(str, Kps_1))}\n"
+        # Get the kp value from kp_1, and replicate the value according to the length of Kps_1, separated by space
+        readme += f"Day 1 Akp(3): {' '.join(map(str, [kp_1]*len(Kps_1)))}\n\n"
+        # Same as Day 2 and Day 3
+        readme += f"Day 2 flux of current day and mean flux: {f107_2} {mean_f107_2}\n"
+        readme += f"Day 2 Akp(1): {' '.join(map(str, Kps_2))}\n"
+        readme += f"Day 2 Akp(3): {' '.join(map(str, [kp_2]*len(Kps_2)))}\n\n"
+        readme += f"Day 3 flux of end day and mean flux: {f107_3} {mean_f107_3}\n"
+        readme += f"Day 3 Akp(1): {' '.join(map(str, Kps_3))}\n"
+        readme += f"Day 3 Akp(3): {' '.join(map(str, [kp_3]*len(Kps_3)))}\n\n"
+        # Day and hour                    Day 1(_0 to _21)              day 2(_0 to _21)              Day 3(_0 to _21)
+        readme += f"Day and hour,                    Day 1(_0 to _21), day 2(_0 to _21), Day 3(_0 to _21)\n"
+        readme += f"Flux of previous day,            {' '.join(map(str, [f107_1]*len(Kps_1)))}, {' '.join(map(str, [f107_2]*len(Kps_2)))}, {' '.join(map(str, [f107_3]*len(Kps_3)))}\n"
+        readme += f"Mean flux,                       {' '.join(map(str, [mean_f107_1]*len(Kps_1)))}, {' '.join(map(str, [mean_f107_2]*len(Kps_2)))}, {' '.join(map(str, [mean_f107_3]*len(Kps_3)))}\n"
+        readme += f"Akp(1),                          {' '.join(map(str, Kps_1))}, {' '.join(map(str, Kps_2))}, {' '.join(map(str, Kps_3))}\n"
+        readme += f"Akp(3),                          {' '.join(map(str, [kp_1]*len(Kps_1)))}, {' '.join(map(str, [kp_2]*len(Kps_2)))}, {' '.join(map(str, [kp_3]*len(Kps_3)))}\n"
+        print(readme)
+        # Save the README.txt file to the final_output_folder
+        with open(f"{final_output_folder}/README.txt", 'w') as f:
+            f.write(readme)
+        
         # Zip the final_output_folder, don't include the parent folder, use the os.system command
         os.system(f"cd {script_dir}/output/{date}/{altitude} && zip -r {final_zip_file} final")
     except Exception as e:
