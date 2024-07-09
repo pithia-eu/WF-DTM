@@ -222,8 +222,8 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
             for akp1 in run['akp1']:
                 # the input parameter for the DTM2020 model is (fm, fl, alt, day, akp1, akp3)
                 run_params = (run['fm'], run['fl'], run['alt'], run['day'], akp1, run['akp3'])
-                # Construct the request URL for the DTM2020 model: https://models.pithia.eu/dc-dtmexecute?fm=180&fl=100&alt=300&day=180&akp1=0&akp3=0
-                run_request = f"https://models.pithia.eu/dc-dtmexecute?fm={run_params[0]}&fl={run_params[1]}&alt={run_params[2]}&day={run_params[3]}&akp1={akp1}&akp3={run_params[5]}"
+                # Construct the request URL for the DTM2020 model: https://models.pithia.eu/dc-dtm/execute?fm=180&fl=100&alt=300&day=180&akp1=0&akp3=0
+                run_request = f"https://models.pithia.eu/dc-dtm/execute?fm={run_params[0]}&fl={run_params[1]}&alt={run_params[2]}&day={run_params[3]}&akp1={akp1}&akp3={run_params[5]}"
                 # Run the request URL
                 run_response = requests.get(run_request)
                 # Response: [{"execution_id": xxx}], change the execution id to day_hour
@@ -234,8 +234,8 @@ async def run_workflow(date: str = Query(..., description="Date in the format 'Y
                 hour += 3
         for execution in run_responses:
             for key, value in execution.items():
-                # Construct the request URL to download the results: https://models.pithia.eu/dc-dtmresults?execution_id=xxx
-                results_request = f"https://models.pithia.eu/dc-dtmresults?execution_id={value}"
+                # Construct the request URL to download the results: https://models.pithia.eu/dc-dtm/results?execution_id=xxx
+                results_request = f"https://models.pithia.eu/dc-dtm/results?execution_id={value}"
                 # print the response content file name and size
                 # print(f"File name: {results_response.headers['Content-Disposition']}, File size: {results_response.headers['Content-Length']}, Request Execution: {key} {value}")
                 # The response content is a zip file, it contains the following files: 'DTM20F107Kp_N2.datx', 'DTM20F107Kp_N2.png', 'DTM20F107Kp_ro.datx', 'DTM20F107Kp_ro.png' ...
