@@ -54,7 +54,7 @@ app = FastAPI(
     title="DTM2020 Workflow API",
     description="<p>The DTM2020 model predictions are calculated at a specified altitude (latitude - local time grids) from the specified start date every 3 hours for 3 days (i.e. 24 epochs, 0h, +3h, +6h, etc) using the observed F10.7 and geomagnetic activity indices Kp. <br/>The effect of a geomagnetic storm can be visualized effectively with this workflow.<br/>The partial density and temperature grids and plots, and the observed F10.7 flux and Kp, can be downloaded by clicking on 'Download file' (rename the file and add .zip as an extension)</p>",
     version="1.0.0",
-    root_path="/dc-dtm"
+    root_path="/wf-dtm"
 )
 
 # Configure CORS for all domains
