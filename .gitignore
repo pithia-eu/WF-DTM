@@ -162,3 +162,8 @@ cython_debug/
 api/output/
 /output/
 local_command.md
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/modules.xml
+/.idea/WF-DTM.iml
+/.idea/workspace.xml
